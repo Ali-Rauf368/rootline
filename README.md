@@ -30,6 +30,33 @@ A fix becomes a draft pull request only after a human approves it.
 | **Dashboards** | MTTD / MTTI / MTTR, change failure rate, agent precision and fix approval rate. Service health with SLO-aware status and sparklines, live dependency map, logs live tail, change history, knowledge base with a retrieval playground. Ctrl+K palette, dark/light themes, responsive layout. |
 | **Simulator** | Live traffic for 9 services, plus 4 game-day scenarios: bad pool config, payments timeout, cache leak, upstream Stripe degradation (no deploy). |
 
+## Real-time collaboration & feature toggles
+
+- **Socket.IO gateway** (`apps/api/src/lib/realtime.ts`). It is attached to the Fastify server. Handshakes are authenticated with a 2-minute stream ticket that is fetched again on every reconnect. Events from any API or worker process reach the browser through Postgres `NOTIFY`. If WebSockets are blocked, Socket.IO falls back to long-polling. The SSE endpoint (`/api/stream`) remains for simple clients.
+- **War rooms:**
+  - live presence (who is viewing an incident)
+  - typing indicators
+  - persistent chat, which viewers can read but not post to
+  - catch-up after a reconnect
+- **Feature toggles** (Settings & toggles page, `PUT /api/flags`, admin only, audited). Every process caches them and the event bus refreshes them, so a flip takes effect without a redeploy.
+
+  | Toggle | Effect |
+  |---|---|
+  | `auto_investigate` | Start the RCA agent automatically (manual runs are always allowed) |
+  | `claude_agent` | Use Claude when a key is configured (off forces the heuristic investigator) |
+  | `fix_generation` | Draft and verify patches |
+  | `two_person_approval` | A fix needs two different responders before a draft PR opens |
+  | `anomaly_detection` | Open incidents from metric anomalies |
+  | `maintenance_mode` | Record anomalies and alerts but don't open incidents (shown as a banner) |
+  | `war_room_chat`, `presence` | Collaboration features |
+
+- **Personal preferences** (stored in the browser):
+  - desktop notifications
+  - sound alerts
+  - auto-follow of the agent feed
+  - compact density
+  - reduced motion
+
 ## Run locally
 
 ```bash

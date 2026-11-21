@@ -264,3 +264,20 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS war_room_messages (
+  id BIGSERIAL PRIMARY KEY,
+  incident_id BIGINT NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+  user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  author TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS war_room_messages_incident ON war_room_messages (incident_id, id);
+
+CREATE TABLE IF NOT EXISTS fix_approvals (
+  fix_id BIGINT NOT NULL REFERENCES fix_proposals(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (fix_id, user_id)
+);

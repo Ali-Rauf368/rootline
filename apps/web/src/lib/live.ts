@@ -1,35 +1,42 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 import { api } from "./api";
 
 const API_PUBLIC = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4100";
 export type LiveEvent = { type: string; incidentId?: number; [k: string]: unknown };
+export type LiveState = "connecting" | "live" | "offline";
 
 /**
- * Server-Sent Events with a short-lived ticket, automatic reconnect with backoff,
- * and a connection state for the UI's "live" indicator.
+ * One Socket.IO connection for the console. Auth is a fresh 2-minute stream ticket fetched on
+ * every (re)connect attempt, so long-lived tabs never hold a reusable credential. Socket.IO handles
+ * reconnect with backoff and falls back from WebSocket to HTTP long-polling behind strict proxies.
  */
-export function useLive(onEvent: (e: LiveEvent) => void, { incident }: { incident?: number } = {}) {
-  const [state, setState] = useState<"connecting" | "live" | "offline">("connecting");
+export function useRealtime(onEvent: (e: LiveEvent) => void) {
+  const [state, setState] = useState<LiveState>("connecting");
+  const [socket, setSocket] = useState<Socket | null>(null);
   const handler = useRef(onEvent);
   handler.current = onEvent;
 
   useEffect(() => {
-    let es: EventSource | null = null, stopped = false, retry = 0, timer: ReturnType<typeof setTimeout>;
-    const types = ["incident.created", "incident.updated", "incident.event", "investigation.step", "investigation.status", "hypotheses.updated", "fix.updated", "metrics.tick", "log", "deploy"];
-    const connect = async () => {
-      try {
-        const { ticket } = await api<{ ticket: string }>("/api/auth/stream-ticket");
-        if (stopped) return;
-        es = new EventSource(`${API_PUBLIC}/api/stream?ticket=${encodeURIComponent(ticket)}${incident ? `&incident=${incident}` : ""}`);
-        es.addEventListener("ready", () => { retry = 0; setState("live"); });
-        for (const t of types) es.addEventListener(t, (m) => { try { handler.current(JSON.parse((m as MessageEvent).data)); } catch { /* ignore */ } });
-        es.onerror = () => { es?.close(); setState("offline"); schedule(); };
-      } catch { setState("offline"); schedule(); }
-    };
-    const schedule = () => { if (!stopped) timer = setTimeout(connect, Math.min(15_000, 1000 * 2 ** retry++)); };
-    connect();
-    return () => { stopped = true; clearTimeout(timer); es?.close(); };
-  }, [incident]);
-  return state;
+    const s = io(API_PUBLIC, {
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 15_000,
+      auth: (cb) => { api<{ ticket: string }>("/api/auth/stream-ticket").then(({ ticket }) => cb({ ticket }), () => cb({})); },
+    });
+    s.on("ready", () => setState("live"));
+    s.on("disconnect", () => setState("offline"));
+    s.on("connect_error", () => setState("offline"));
+    s.io.on("reconnect_attempt", () => setState("connecting"));
+    s.onAny((type: string, payload: unknown) => {
+      if (type === "ready") return;
+      handler.current({ ...(payload && typeof payload === "object" ? payload : {}), type } as LiveEvent);
+    });
+    setSocket(s);
+    return () => { s.removeAllListeners(); s.close(); setSocket(null); };
+  }, []);
+  return { state, socket };
 }

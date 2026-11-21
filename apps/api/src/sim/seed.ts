@@ -62,7 +62,8 @@ export async function seed({ force = false } = {}) {
       await q("INSERT INTO incident_events (incident_id, ts, kind, title, actor) VALUES ($1,$2,$3,$4,'rootline')", [inc.id, ts, kind, title]);
     await q("INSERT INTO hypotheses (incident_id, rank, title, description, category, confidence, status, evidence) VALUES ($1,1,$2,$2,'config_change',0.82,$3,'[]')", [inc.id, p.cause, p.daysAgo === 9 ? "rejected" : "confirmed"]);
   }
-  await q("SELECT setval('incident_key_seq', greatest((SELECT count(*) FROM incidents) + 1000, 1001))");
+  // never rewind below a key already in use (the sequence survives TRUNCATE ... RESTART IDENTITY)
+  await q("SELECT setval('incident_key_seq', greatest((SELECT max(substring(key from 5)::int) FROM incidents WHERE key ~ '^INC-[0-9]+$'), (SELECT count(*) FROM incidents) + 1000, 1001))");
   return true;
 }
 

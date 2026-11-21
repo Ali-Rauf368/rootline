@@ -61,7 +61,7 @@ export default function IntegrationsPage() {
           </Card>
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-5">
+      <div className="grid gap-6 xl:grid-cols-5 [&>*]:min-w-0">
         <Card className="card-pad xl:col-span-3">
           <CardHeader title="Send data" subtitle="Webhook & ingestion endpoints (API key auth, idempotent with Idempotency-Key)" icon={Plug} action={<Tabs value={tab} onChange={setTab} options={[{ value: "logs", label: "Logs" }, { value: "metrics", label: "Metrics" }, { value: "deploys", label: "Deploys" }, { value: "alertmanager", label: "Alertmanager" }]} />} />
           <div className="relative"><pre className="overflow-x-auto rounded-lg bg-bg p-4 text-xs leading-5 mono">{SNIPPETS(origin)[tab]}</pre>

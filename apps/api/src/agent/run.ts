@@ -1,3 +1,4 @@
+import { flag } from "../lib/flags.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { one, q } from "../db/pool.js";
 import { env } from "../lib/env.js";
@@ -9,7 +10,7 @@ import { heuristicInvestigate } from "./heuristic.js";
 import { claudeInvestigate, claudeConfigured } from "./claude.js";
 import type { RunContext } from "./tools.js";
 
-export const agentMode = () => (env.AGENT_MODE === "heuristic" ? "heuristic" : env.AGENT_MODE === "claude" || claudeConfigured() ? "claude" : "heuristic");
+export const agentMode = () => (env.AGENT_MODE === "heuristic" || !flag("claude_agent") ? "heuristic" : env.AGENT_MODE === "claude" || claudeConfigured() ? "claude" : "heuristic");
 
 /** Runs one investigation end-to-end and persists every step, hypothesis and verified fix. */
 export async function investigate(incidentId: number, trigger = "auto") {
@@ -63,7 +64,8 @@ export async function investigate(incidentId: number, trigger = "auto") {
     await publish({ type: "hypotheses.updated", incidentId });
 
     // Verify and store fix proposals (never auto-applied)
-    for (const f of ctx.fixes) {
+    if (!flag("fix_generation") && ctx.fixes.length) await addEvent(incidentId, "agent", "Fix generation is turned off", "The agent found a candidate fix but feature toggle fix_generation is off.", "rootline-agent");
+    for (const f of flag("fix_generation") ? ctx.fixes : []) {
       // identical patch already awaiting approval (e.g. from an earlier run) → keep that one
       if (await one("SELECT 1 FROM fix_proposals WHERE incident_id = $1 AND patch = $2 AND status IN ('pending_approval','approved','pr_opened')", [incidentId, f.patch])) continue;
       await q("UPDATE fix_proposals SET status = 'rejected', decision_note = 'Superseded by a newer investigation' WHERE incident_id = $1 AND status = 'pending_approval'", [incidentId]);

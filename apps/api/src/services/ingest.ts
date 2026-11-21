@@ -1,3 +1,4 @@
+import { flag } from "../lib/flags.js";
 import { z } from "zod";
 import { one, q } from "../db/pool.js";
 import { publish } from "../lib/bus.js";
@@ -60,7 +61,8 @@ export async function ingestMetrics(points: z.infer<typeof MetricIn>[]) {
   const rows = points.map((p, i) => { values.push(p.service, p.name, p.ts ?? new Date(), p.value); return `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`; });
   await q(`INSERT INTO metric_points (service, name, ts, value) VALUES ${rows.join(",")} ON CONFLICT (service, name, ts) DO UPDATE SET value = EXCLUDED.value`, values);
 
-  const anomalies = [];
+  const anomalies: unknown[] = [];
+  if (!flag("anomaly_detection")) return { inserted: points.length, anomalies };
   const keys = [...new Map(points.filter((p) => METRIC_RULES[p.name]).map((p) => [`${p.service}|${p.name}`, p])).values()];
   for (const p of keys) {
     const series = (await q<{ value: number; ts: Date }>("SELECT value, ts FROM metric_points WHERE service = $1 AND name = $2 AND ts > now() - interval '45 minutes' ORDER BY ts DESC LIMIT 60", [p.service, p.name])).reverse();
@@ -90,6 +92,12 @@ export async function ingestMetrics(points: z.infer<typeof MetricIn>[]) {
       await q("INSERT INTO anomalies (service, metric, ts, value, baseline, zscore, incident_id) VALUES ($1,$2,now(),$3,$4,$5,$6)", [p.service, p.name, d.value, d.baseline, d.zscore, related.id]);
       await publish({ type: "incident.updated", incidentId: related.id });
       anomalies.push({ service: p.service, metric: p.name, ...d, incidentId: related.id, correlated: true });
+      continue;
+    }
+    if (flag("maintenance_mode")) {
+      // planned work: keep the evidence, don't page anyone
+      await q("INSERT INTO anomalies (service, metric, ts, value, baseline, zscore, incident_id) VALUES ($1,$2,now(),$3,$4,$5,NULL)", [p.service, p.name, d.value, d.baseline, d.zscore]);
+      anomalies.push({ service: p.service, metric: p.name, ...d, suppressed: "maintenance_mode" });
       continue;
     }
     // onset = first point of the current breach run
@@ -152,6 +160,7 @@ export async function ingestAlerts(body: z.infer<typeof AlertIn>) {
       out.push({ service, name, status: "resolved", incidentId: inc?.id ?? null });
       continue;
     }
+    if (flag("maintenance_mode")) { out.push({ service, name, status: "suppressed", incidentId: null }); continue; }
     const sevLabel = (a.labels.severity ?? "").toLowerCase();
     const severity = sevLabel === "critical" || sevLabel === "page" ? "sev1" : sevLabel === "warning" ? "sev3" : "sev2";
     const { incident, created } = await openIncident({ title: a.annotations.summary ?? `${name} on ${service}`, severity, services: [service], startedAt: a.startsAt ?? new Date(), source: "alert", dedupeKey: `alert:${service}:${name}`, summary: a.annotations.description ?? "", data: { labels: a.labels } });

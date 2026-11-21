@@ -1,9 +1,10 @@
 "use client";
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BrainCircuit, RefreshCw, Wrench, GitPullRequestDraft, Check, X, BookOpen, Activity, GitCommitHorizontal, ScrollText, Network, History, Gauge, FileDiff, ChevronDown, ChevronRight, CircleDot, Terminal, AlertTriangle, MessageSquarePlus, ExternalLink, ShieldCheck, Clock3, Sparkles } from "lucide-react";
+import { ArrowLeft, BrainCircuit, RefreshCw, Wrench, GitPullRequestDraft, Check, X, BookOpen, Activity, GitCommitHorizontal, ScrollText, Network, History, Gauge, FileDiff, ChevronDown, ChevronRight, CircleDot, Terminal, AlertTriangle, MessageSquarePlus, ExternalLink, ShieldCheck, Clock3, Sparkles, Users, PauseCircle } from "lucide-react";
 import { api, useApi } from "@/lib/api";
-import { useLiveEvents, useSession, can } from "@/components/shell";
+import { useLiveEvents, useSession, can, useFlags, usePrefs } from "@/components/shell";
+import { useWarRoom, PresenceStack, ChatCard } from "@/components/warroom";
 import { Card, CardHeader, Badge, Empty, ErrorBox, Skeleton, ConfidenceBar, Modal, Spinner, Tabs, useToast, cx } from "@/components/ui";
 import { SeverityBadge, StatusBadge, STATUS } from "@/components/domain";
 import { TimeSeries, pivot, SERIES_COLORS, type Marker } from "@/components/charts";
@@ -24,8 +25,11 @@ export default function WarRoom({ params }: { params: Promise<{ id: string }> })
   const [running, setRunning] = useState<number | null>(null);
   const user = useSession();
   const toast = useToast();
+  const { on } = useFlags();
+  const room = useWarRoom(Number(id));
 
   useLiveEvents((e) => {
+    if (e.type === "fix.approval" && e.incidentId === Number(id) && e.by !== user?.name) toast(`${e.by} approved a fix (${e.approvals} of ${e.required}). One more approval needed.`, "info");
     if (e.incidentId !== Number(id)) return;
     if (e.type === "investigation.step") { setRunning(e.investigationId as number); setLiveSteps((s) => [...s, e.step]); }
     else if (e.type === "investigation.status") { if (e.status === "running") { setLiveSteps([]); setRunning(e.investigationId as number); } else { setRunning(null); detail.reload(); signals.reload(); } }
@@ -65,6 +69,7 @@ export default function WarRoom({ params }: { params: Promise<{ id: string }> })
               <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />started {dateTime(inc.started_at)} · {inc.status === "resolved" ? `lasted ${duration(inc.started_at, inc.resolved_at)}` : `open ${duration(inc.started_at)}`}</span>
               <span className="flex flex-wrap items-center gap-1">{inc.services.map((s: string) => <Link key={s} href={`/services/${s}`}><Badge className="mono hover:border-accent/50">{s}</Badge></Link>)}</span>
             </div>
+            {on("presence") && <div className="mt-3"><PresenceStack viewers={room.viewers} /></div>}
           </div>
           {responder && (
             <div className="flex flex-wrap gap-2">
@@ -91,13 +96,21 @@ export default function WarRoom({ params }: { params: Promise<{ id: string }> })
         </ol>
       </Card>
 
+      {!on("auto_investigate") && !latestInv && inc.status !== "resolved" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-sm">
+          <PauseCircle className="h-4 w-4 shrink-0 text-warn" /><span className="flex-1">Auto-investigation is turned off, so the agent has not started.</span>
+          {responder && <button className="btn-primary px-3 py-1.5 text-xs" onClick={rerun}><Sparkles className="h-3.5 w-3.5" />Start investigation</button>}
+        </div>
+      )}
+
       <div className="grid gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
+        <div className="min-w-0 space-y-5 xl:col-span-2">
           <SignalsCard data={signals.data} incident={inc} fixes={fixes} />
           <HypothesesCard hypotheses={hypotheses} running={isRunning} responder={responder} reload={detail.reload} />
-          <FixesCard fixes={fixes} responder={responder} reload={detail.reload} />
+          <FixesCard fixes={fixes} responder={responder} reload={detail.reload} twoPerson={on("two_person_approval")} />
         </div>
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
+          {(on("war_room_chat") || room.viewers.length > 0) && <ChatCard incidentId={inc.id} typing={room.typing} />}
           <AgentFeed steps={shownSteps} investigation={latestInv} running={isRunning} />
           <TimelineCard events={events} incidentId={inc.id} responder={responder} reload={detail.reload} />
           {signals.data?.errors?.length > 0 && (
@@ -218,7 +231,8 @@ function CitationDrawer({ citation, onClose }: { citation: Json | null; onClose:
   );
 }
 
-function FixesCard({ fixes, responder, reload }: { fixes: Json[]; responder: boolean; reload: () => void }) {
+function FixesCard({ fixes, responder, reload, twoPerson }: { fixes: Json[]; responder: boolean; reload: () => void; twoPerson: boolean }) {
+  const me = useSession();
   const [view, setView] = useState<Record<number, "patch" | "test" | "checks">>({});
   const [confirm, setConfirm] = useState<{ fix: Json; decision: "approve" | "reject" } | null>(null);
   const [note, setNote] = useState("");
@@ -230,7 +244,7 @@ function FixesCard({ fixes, responder, reload }: { fixes: Json[]; responder: boo
     setBusy(true);
     try {
       const r = await api<Json>(`/api/fixes/${confirm.fix.id}/${confirm.decision}`, { method: "POST", json: { note: note || undefined } });
-      toast(confirm.decision === "approve" ? `Draft PR opened${r.pr_mode === "simulated" ? " (simulated)" : ""}` : "Fix rejected", confirm.decision === "approve" ? "ok" : "info");
+      toast(r.status === "awaiting_second_approval" ? "Approval recorded (1 of 2). A second responder must approve." : confirm.decision === "approve" ? `Draft PR opened${r.pr_mode === "simulated" ? " (simulated)" : ""}` : "Fix rejected", confirm.decision === "approve" ? "ok" : "info");
       setConfirm(null); setNote(""); reload();
     } catch (e) { toast((e as Error).message, "bad"); }
     finally { setBusy(false); }
@@ -265,8 +279,15 @@ function FixesCard({ fixes, responder, reload }: { fixes: Json[]; responder: boo
                 )}
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
+                {f.status === "pending_approval" && twoPerson && (
+                  <span className="flex items-center gap-1.5 rounded-lg border border-line bg-raised/60 px-2.5 py-1.5 text-xs" title={f.approvals?.map((a: Json) => a.name).join(", ")}>
+                    <Users className="h-3.5 w-3.5 text-accent" /><b className="tabular-nums">{f.approvals?.length ?? 0} of 2</b> approvals{f.approvals?.length ? ` · ${f.approvals.map((a: Json) => a.name).join(", ")}` : ""}
+                  </span>
+                )}
                 {f.status === "pending_approval" && responder && <>
-                  <button className="btn-ok" onClick={() => setConfirm({ fix: f, decision: "approve" })}><GitPullRequestDraft className="h-4 w-4" />Approve &amp; open draft PR</button>
+                  {twoPerson && f.approvals?.some((a: Json) => a.userId === me?.id)
+                    ? <span className="text-xs text-muted">You approved. Waiting for a second responder.</span>
+                    : <button className="btn-ok" onClick={() => setConfirm({ fix: f, decision: "approve" })}><GitPullRequestDraft className="h-4 w-4" />{twoPerson && f.approvals?.length ? "Add second approval & open PR" : twoPerson ? "Approve (1 of 2)" : "Approve & open draft PR"}</button>}
                   <button className="btn-secondary" onClick={() => setConfirm({ fix: f, decision: "reject" })}><X className="h-4 w-4" />Reject</button>
                 </>}
                 {f.pr_url && <a href={f.pr_url} target="_blank" rel="noreferrer" className="btn-secondary"><ExternalLink className="h-4 w-4" />View PR{f.pr_mode === "simulated" ? " (simulated)" : f.pr_number ? ` #${f.pr_number}` : ""}</a>}
@@ -289,13 +310,16 @@ function FixesCard({ fixes, responder, reload }: { fixes: Json[]; responder: boo
 
 function AgentFeed({ steps, investigation, running }: { steps: Json[]; investigation: Json; running: boolean }) {
   const [open, setOpen] = useState<Record<number, boolean>>({});
+  const { prefs } = usePrefs();
+  const feed = useRef<HTMLOListElement>(null);
+  useEffect(() => { if (prefs.followAgent && running && feed.current) feed.current.scrollTop = feed.current.scrollHeight; }, [steps.length, running, prefs.followAgent]);
   return (
     <Card className="card-pad">
       <CardHeader title="Agent activity" icon={Sparkles}
         subtitle={investigation ? `${investigation.mode}${investigation.model ? ` · ${investigation.model}` : ""} · ${investigation.status}${investigation.input_tokens ? ` · ${(investigation.input_tokens + investigation.output_tokens).toLocaleString()} tokens` : ""}` : "Not started"}
         action={running ? <Badge tone="warn" dot>running</Badge> : investigation?.status === "completed" ? <Badge tone="ok">done</Badge> : undefined} />
       {!steps.length ? <p className="text-sm text-muted">{running ? "Starting…" : "No investigation yet."}</p> : (
-        <ol className="relative max-h-[560px] space-y-0 overflow-y-auto pr-1">
+        <ol ref={feed} className="relative max-h-[560px] space-y-0 overflow-y-auto pr-1">
           {steps.map((s, i) => {
             const isTool = s.kind === "tool_call";
             const text = s.output?.text ?? s.output?.error;

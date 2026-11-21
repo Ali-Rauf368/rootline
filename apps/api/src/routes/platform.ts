@@ -9,6 +9,8 @@ import { queueStats, queueBackend } from "../lib/queue.js";
 import { searchKnowledge, upsertDocument } from "../services/knowledge.js";
 import { agentMode } from "../agent/run.js";
 import { SCENARIOS, runScenario } from "../sim/engine.js";
+import { FLAG_DEFS, allFlags, setFlags, type FlagName } from "../lib/flags.js";
+import { realtimeStats } from "../lib/realtime.js";
 
 export default async function platformRoutes(app: FastifyInstance) {
   const viewer = { preHandler: requireRole("viewer") };
@@ -177,6 +179,21 @@ export default async function platformRoutes(app: FastifyInstance) {
     const f = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100), actor: z.string().optional() }).parse(req.query);
     return q("SELECT * FROM audit_log WHERE ($1::text IS NULL OR actor = $1) ORDER BY id DESC LIMIT $2", [f.actor ?? null, f.limit]);
   });
+  /** Feature toggles: readable by everyone (the UI adapts), writable by admins, every flip audited. */
+  app.get("/api/flags", viewer, async () => {
+    const values = allFlags();
+    return Object.entries(FLAG_DEFS).map(([key, d]) => ({ key, label: d.label, description: d.description, group: d.group, default: d.default, enabled: values[key as FlagName] }));
+  });
+  app.put("/api/flags", admin, async (req) => {
+    const patch = z.record(z.enum(Object.keys(FLAG_DEFS) as [FlagName, ...FlagName[]]), z.boolean()).parse(req.body);
+    const before = allFlags();
+    const after = await setFlags(patch);
+    const changed = Object.fromEntries(Object.entries(patch).filter(([k, v]) => before[k as FlagName] !== v));
+    if (Object.keys(changed).length) await audit(req.user!.email, "flags.update", "flags", { changed }, req.ip);
+    return after;
+  });
+  app.get("/api/realtime", viewer, async () => realtimeStats());
+
   app.get("/api/users", viewer, async () => q("SELECT id, name, email, role FROM users ORDER BY name"));
 
   // Failure simulator (demo / game days)

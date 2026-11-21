@@ -149,3 +149,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     </ToastCtx.Provider>
   );
 }
+
+/** Accessible switch (role="switch"), keyboard operable, with an optional pending state. */
+export function Toggle({ checked, onChange, disabled, pending, label, size = "md" }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; pending?: boolean; label: string; size?: "sm" | "md" }) {
+  const dims = size === "sm" ? { track: "h-5 w-9", knob: "h-4 w-4", on: "translate-x-4" } : { track: "h-6 w-11", knob: "h-5 w-5", on: "translate-x-5" };
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled || pending} onClick={() => onChange(!checked)}
+      className={cx("relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50",
+        dims.track, checked ? "bg-accent" : "bg-line")}>
+      <span className={cx("pointer-events-none flex items-center justify-center rounded-full bg-white shadow-sm ring-0 transition-transform duration-200", dims.knob, checked ? dims.on : "translate-x-0.5")}>
+        {pending && <Loader2 className="h-3 w-3 animate-spin text-accent" />}
+      </span>
+    </button>
+  );
+}

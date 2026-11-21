@@ -5,6 +5,9 @@ test("game day: detect → investigate → cite → verified fix → human appro
   await page.getByRole("button", { name: "Responder" }).click();
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Production overview")).toBeVisible();
+  // start from a clean slate when the stack is reused between runs
+  const open = await (await page.request.get("/api/incidents?status=open&limit=200")).json();
+  for (const i of open) await page.request.patch(`/api/incidents/${i.id}`, { data: { status: "resolved" } });
 
   await page.getByRole("button", { name: "Simulate" }).click();
   await page.getByText("Payments: client timeout lowered below Stripe p99").click();

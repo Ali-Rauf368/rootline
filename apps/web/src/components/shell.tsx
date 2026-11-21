@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertOctagon, Boxes, ScrollText, GitCommitHorizontal, BookOpen, Plug, ShieldCheck, Menu, X, Sun, Moon, LogOut, Search, Zap, ChevronRight, CornerDownLeft } from "lucide-react";
+import { Activity, AlertOctagon, Boxes, ScrollText, GitCommitHorizontal, BookOpen, Plug, ShieldCheck, Menu, X, Sun, Moon, LogOut, Search, Zap, ChevronRight, CornerDownLeft, Settings2, Wrench } from "lucide-react";
 import { api, useApi } from "@/lib/api";
-import { useLive, type LiveEvent } from "@/lib/live";
+import { useRealtime, type LiveEvent, type LiveState } from "@/lib/live";
+import type { Socket } from "socket.io-client";
 import { LiveDot, SeverityBadge } from "./domain";
 import { Modal, Spinner, ToastProvider, useToast, cx } from "./ui";
 
@@ -13,9 +14,39 @@ const SessionCtx = createContext<User | null>(null);
 export const useSession = () => useContext(SessionCtx);
 export const can = (u: User | null, role: User["role"]) => !!u && ["viewer", "responder", "admin"].indexOf(u.role) >= ["viewer", "responder", "admin"].indexOf(role);
 
-/** One SSE connection for the whole console; components subscribe to the events they care about. */
+/** One Socket.IO connection for the whole console; components subscribe to the events they care about. */
 type Listener = (e: LiveEvent) => void;
-const LiveCtx = createContext<{ state: "connecting" | "live" | "offline"; subscribe: (l: Listener) => () => void }>({ state: "connecting", subscribe: () => () => {} });
+const LiveCtx = createContext<{ state: LiveState; subscribe: (l: Listener) => () => void; socket: Socket | null }>({ state: "connecting", subscribe: () => () => {}, socket: null });
+export const useSocket = () => useContext(LiveCtx).socket;
+
+/** Feature toggles (server-side, admin-controlled), pushed live when flipped. */
+export interface Flag { key: string; label: string; description: string; group: string; default: boolean; enabled: boolean }
+const FlagsCtx = createContext<{ flags: Flag[]; on: (k: string) => boolean; reload: () => void }>({ flags: [], on: () => true, reload: () => {} });
+export const useFlags = () => useContext(FlagsCtx);
+
+/** Personal preferences (this browser only). */
+export interface Prefs { desktopNotifications: boolean; soundAlerts: boolean; compact: boolean; reduceMotion: boolean; followAgent: boolean }
+const DEFAULT_PREFS: Prefs = { desktopNotifications: false, soundAlerts: false, compact: false, reduceMotion: false, followAgent: true };
+const PrefsCtx = createContext<{ prefs: Prefs; setPref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void }>({ prefs: DEFAULT_PREFS, setPref: () => {} });
+export const usePrefs = () => useContext(PrefsCtx);
+function usePrefsState() {
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  useEffect(() => { try { setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem("rl-prefs") ?? "{}") }); } catch { /* ignore */ } }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle("compact", prefs.compact);
+    document.documentElement.classList.toggle("reduce-motion", prefs.reduceMotion);
+  }, [prefs.compact, prefs.reduceMotion]);
+  const setPref = useCallback(<K extends keyof Prefs>(k: K, v: Prefs[K]) => setPrefs((p) => { const n = { ...p, [k]: v }; try { localStorage.setItem("rl-prefs", JSON.stringify(n)); } catch { /* ignore */ } return n; }), []);
+  return { prefs, setPref };
+}
+function chime() {
+  try {
+    const ctx = new AudioContext(), o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(880, ctx.currentTime); o.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.4);
+  } catch { /* audio unavailable */ }
+}
 export function useLiveEvents(fn: Listener, deps: unknown[] = []) {
   const { subscribe } = useContext(LiveCtx);
   const ref = useRef(fn); ref.current = fn;
@@ -31,7 +62,7 @@ const NAV = [
     { href: "/changes", label: "Changes", icon: GitCommitHorizontal },
   ] },
   { group: "Knowledge", items: [{ href: "/knowledge", label: "Runbooks & docs", icon: BookOpen }] },
-  { group: "Platform", items: [{ href: "/integrations", label: "Integrations", icon: Plug }, { href: "/audit", label: "Audit log", icon: ShieldCheck }] },
+  { group: "Platform", items: [{ href: "/integrations", label: "Integrations", icon: Plug }, { href: "/audit", label: "Audit log", icon: ShieldCheck }, { href: "/settings", label: "Settings & toggles", icon: Settings2 }] },
 ];
 
 function useTheme() {
@@ -57,13 +88,28 @@ function ShellInner({ children }: { children: ReactNode }) {
   const toast = useToast();
   const router = useRouter();
 
-  const state = useLive((e) => {
+  const flagsApi = useApi<Flag[]>("/api/flags");
+  const { prefs, setPref } = usePrefsState();
+  const prefsRef = useRef(prefs); prefsRef.current = prefs;
+  const { state, socket } = useRealtime((e) => {
     listeners.current.forEach((l) => l(e));
-    if (e.type === "incident.created") { open.reload(); toast("New incident detected. The agent is investigating.", "info"); }
+    if (e.type === "flags.updated") flagsApi.reload();
+    if (e.type === "incident.created") {
+      open.reload();
+      toast("New incident detected. The agent is investigating.", "info");
+      if (prefsRef.current.soundAlerts) chime();
+      if (prefsRef.current.desktopNotifications && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+        const n = new Notification("Rootline: new incident", { body: "The agent has started investigating.", tag: `inc-${e.incidentId}`, icon: "/favicon.svg" });
+        n.onclick = () => { window.focus(); router.push(`/incidents/${e.incidentId}`); };
+      }
+    }
     if (e.type === "incident.updated") open.reload();
   });
   const subscribe = useCallback((l: Listener) => { listeners.current.add(l); return () => { listeners.current.delete(l); }; }, []);
-  const live = useMemo(() => ({ state, subscribe }), [state, subscribe]);
+  const live = useMemo(() => ({ state, subscribe, socket }), [state, subscribe, socket]);
+  const flagList = flagsApi.data;
+  const flags = useMemo(() => ({ flags: flagList ?? [], on: (k: string) => flagList?.find((f) => f.key === k)?.enabled ?? true, reload: flagsApi.reload }), [flagList, flagsApi.reload]);
+  const prefsValue = useMemo(() => ({ prefs, setPref }), [prefs, setPref]);
 
   useEffect(() => setDrawer(false), [pathname]);
   useEffect(() => {
@@ -111,7 +157,7 @@ function ShellInner({ children }: { children: ReactNode }) {
 
   return (
     <SessionCtx.Provider value={user}>
-      <LiveCtx.Provider value={live}>
+      <LiveCtx.Provider value={live}><FlagsCtx.Provider value={flags}><PrefsCtx.Provider value={prefsValue}>
         <div className="min-h-screen">
           <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-line bg-panel p-3 lg:block">{nav}</aside>
           {drawer && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} /><aside className="absolute inset-y-0 left-0 w-72 animate-fadeIn border-r border-line bg-panel p-3"><button className="btn-ghost absolute right-2 top-2 p-1.5" onClick={() => setDrawer(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>{nav}</aside></div>}
@@ -127,12 +173,18 @@ function ShellInner({ children }: { children: ReactNode }) {
                 <button className="btn-ghost p-2" onClick={toggle} aria-label="Toggle theme">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
               </div>
             </header>
+            {flags.on("maintenance_mode") && (
+              <div className="flex items-center gap-2 border-b border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn sm:px-6" role="status">
+                <Wrench className="h-3.5 w-3.5 shrink-0" /><span><b>Maintenance mode is on.</b> Signals are still recorded, but no new incidents will be opened.</span>
+                {can(user, "admin") && <Link href="/settings" className="ml-auto shrink-0 font-medium underline underline-offset-2">Manage</Link>}
+              </div>
+            )}
             <main className="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
           </div>
           <CommandPalette open={palette} onClose={() => setPalette(false)} />
           <SimulateDialog open={sim} onClose={() => setSim(false)} />
         </div>
-      </LiveCtx.Provider>
+      </PrefsCtx.Provider></FlagsCtx.Provider></LiveCtx.Provider>
     </SessionCtx.Provider>
   );
 }

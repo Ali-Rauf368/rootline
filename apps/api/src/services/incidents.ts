@@ -1,3 +1,4 @@
+import { flag } from "../lib/flags.js";
 import { one, q } from "../db/pool.js";
 import { publish } from "../lib/bus.js";
 import { enqueue } from "../lib/queue.js";
@@ -32,6 +33,7 @@ export async function openIncident(input: { title: string; severity: "sev1" | "s
 }
 
 export async function startInvestigation(incidentId: number, trigger: string) {
+  if (!trigger.startsWith("manual") && !flag("auto_investigate")) { await addEvent(incidentId, "agent", "Auto-investigation is turned off", `Trigger: ${trigger}. Start it manually from the war room.`, "rootline"); return; }
   await enqueue("investigate", { incidentId, trigger }, { dedupeKey: `investigate-${incidentId}`, maxAttempts: 2 });
 }
 

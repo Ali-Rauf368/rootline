@@ -41,3 +41,9 @@
   .mono { font-family: var(--font-mono); }
   .table-row { @apply border-b border-line/70 last:border-0 hover:bg-raised/60 transition-colors; }
 }
+
+/* personal preferences */
+html.compact .card-pad { padding: 0.75rem; }
+html.compact main { padding-top: 1rem; }
+html.compact table td, html.compact table th { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

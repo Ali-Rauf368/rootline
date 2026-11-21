@@ -15,7 +15,10 @@ export type BusEvent =
   | { type: "hypotheses.updated" | "fix.updated"; incidentId: number }
   | { type: "metrics.tick"; ts: string }
   | { type: "log"; log: unknown }
-  | { type: "deploy"; deploy: unknown };
+  | { type: "deploy"; deploy: unknown }
+  | { type: "flags.updated"; flags: Record<string, boolean> }
+  | { type: "chat.message"; incidentId: number; message: unknown }
+  | { type: "fix.approval"; incidentId: number; fixId: number; approvals: number; required: number; by: string };
 
 const CHANNEL = "rootline_events";
 const local = new EventEmitter();

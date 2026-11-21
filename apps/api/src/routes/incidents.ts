@@ -4,6 +4,8 @@ import { one, q } from "../db/pool.js";
 import { requireRole } from "../lib/auth.js";
 import { audit } from "../lib/audit.js";
 import { publish } from "../lib/bus.js";
+import { flag } from "../lib/flags.js";
+import { recentMessages } from "../lib/realtime.js";
 import { addEvent, setStatus, startInvestigation, openIncident, STATUSES } from "../services/incidents.js";
 import { openDraftPr } from "../services/github.js";
 import { onFixMerged } from "../sim/engine.js";
@@ -35,7 +37,9 @@ export default async function incidentRoutes(app: FastifyInstance) {
       q("SELECT * FROM incident_events WHERE incident_id = $1 ORDER BY ts", [id]),
       q("SELECT * FROM investigations WHERE incident_id = $1 ORDER BY id DESC", [id]),
       q(`SELECT h.*, d.sha AS deploy_sha, d.service AS deploy_service, d.message AS deploy_message FROM hypotheses h LEFT JOIN deploys d ON d.id = h.suspect_deploy_id WHERE h.incident_id = $1 ORDER BY (h.status = 'rejected'), h.investigation_id DESC NULLS LAST, h.rank`, [id]),
-      q("SELECT f.*, u.name AS decided_by_name FROM fix_proposals f LEFT JOIN users u ON u.id = f.decided_by WHERE f.incident_id = $1 ORDER BY f.id DESC", [id]),
+      q(`SELECT f.*, u.name AS decided_by_name,
+           COALESCE((SELECT json_agg(json_build_object('userId', a.user_id, 'name', au.name, 'at', a.created_at) ORDER BY a.created_at) FROM fix_approvals a JOIN users au ON au.id = a.user_id WHERE a.fix_id = f.id), '[]') AS approvals
+         FROM fix_proposals f LEFT JOIN users u ON u.id = f.decided_by WHERE f.incident_id = $1 ORDER BY f.id DESC`, [id]),
     ]);
     const steps = investigations[0] ? await q("SELECT * FROM investigation_steps WHERE investigation_id = $1 ORDER BY seq", [investigations[0].id]) : [];
     return { incident, events, investigations, steps, hypotheses, fixes };
@@ -105,10 +109,26 @@ export default async function incidentRoutes(app: FastifyInstance) {
     return h;
   });
 
+  app.get("/api/incidents/:id/messages", viewer, async (req) => recentMessages(idParam.parse(req.params).id));
+
   /** Human-in-the-loop gate: only an approval by a responder opens a (draft) PR. */
   app.post("/api/fixes/:id/:decision", responder, async (req, reply) => {
     const { id, decision } = z.object({ id: z.coerce.number().int(), decision: z.enum(["approve", "reject"]) }).parse(req.params);
     const { note } = z.object({ note: z.string().max(1000).optional() }).parse(req.body ?? {});
+    // two-person rule: collect distinct approvals first; the second one falls through to the normal gate
+    if (decision === "approve" && flag("two_person_approval")) {
+      const pending = await one("SELECT incident_id FROM fix_proposals WHERE id = $1 AND status = 'pending_approval'", [id]);
+      if (!pending) return reply.code(409).send({ error: "conflict", message: "Fix is not pending approval (already decided or failed verification)" });
+      await q("INSERT INTO fix_approvals (fix_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [id, req.user!.id]);
+      const { n } = (await one<{ n: number }>("SELECT count(*)::int AS n FROM fix_approvals WHERE fix_id = $1", [id]))!;
+      if (n < 2) {
+        await audit(req.user!.email, "fix.approve_first", `fix:${id}`, { note }, req.ip);
+        await addEvent(pending.incident_id, "fix", `First approval by ${req.user!.name} (1 of 2)`, "Two-person approval is on: a different responder must also approve.", req.user!.name, { fixId: id });
+        await publish({ type: "fix.approval", incidentId: pending.incident_id, fixId: id, approvals: n, required: 2, by: req.user!.name });
+        await publish({ type: "fix.updated", incidentId: pending.incident_id });
+        return reply.code(202).send({ status: "awaiting_second_approval", approvals: n, required: 2 });
+      }
+    }
     // optimistic lock: only a pending fix can be decided, and only once
     const fix = await one(`UPDATE fix_proposals SET status = $2, decided_by = $3, decided_at = now(), decision_note = $4 WHERE id = $1 AND status = 'pending_approval' RETURNING *`,
       [id, decision === "approve" ? "approved" : "rejected", req.user!.id, note ?? null]);
