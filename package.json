@@ -1,0 +1,14 @@
+{
+  "name": "rootline",
+  "private": true,
+  "description": "Rootline – autonomous production incident & root-cause investigator",
+  "workspaces": ["apps/api", "apps/web"],
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "test": "npm -w apps/api test",
+    "typecheck": "npm -w apps/api run typecheck && npm -w apps/web run typecheck",
+    "build": "npm -w apps/web run build",
+    "db:stop": "PG=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1); $PG/pg_ctl -D .local/pg stop"
+  },
+  "devDependencies": { "concurrently": "^9.1.2" }
+}

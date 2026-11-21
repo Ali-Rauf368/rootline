@@ -1,0 +1,34 @@
+import { env } from "./lib/env.js";
+import { buildApp } from "./app.js";
+import { migrate } from "./db/migrate.js";
+import { pool } from "./db/pool.js";
+import { seed } from "./sim/seed.js";
+import { startBusListener, stopBusListener } from "./lib/bus.js";
+import { startWorker, stopWorker, queueBackend } from "./lib/queue.js";
+import { registerJobs } from "./worker.js";
+import { startSimulator, stopSimulator } from "./sim/engine.js";
+import { agentMode } from "./agent/run.js";
+
+await migrate();
+if (env.SIMULATOR === "on" && (await seed())) console.log("seeded demo data (admin@rootline.dev / oncall@rootline.dev, password rootline-demo)");
+await startBusListener();
+registerJobs();
+// WORKER=off runs the API only (scale workers separately with `npm run worker`)
+if (process.env.WORKER !== "off") startWorker(Number(process.env.WORKER_CONCURRENCY ?? 3));
+if (env.SIMULATOR === "on") startSimulator(Number(process.env.SIM_INTERVAL_MS ?? 10_000));
+
+const app = await buildApp();
+await app.listen({ port: env.PORT, host: process.env.HOST ?? "127.0.0.1" });
+app.log.info(`Rootline API on :${env.PORT} · queue=${queueBackend()} · agent=${agentMode()} · simulator=${env.SIMULATOR}`);
+
+for (const sig of ["SIGINT", "SIGTERM"] as const)
+  process.on(sig, async () => {
+    app.log.info(`${sig}: draining`);
+    stopSimulator();
+    setTimeout(() => process.exit(1), 15_000).unref();
+    await app.close();
+    await stopWorker();
+    await stopBusListener();
+    await pool.end();
+    process.exit(0);
+  });

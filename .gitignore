@@ -1,0 +1,10 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+.local/
+coverage/
+*.log
+apps/web/next-env.d.ts
