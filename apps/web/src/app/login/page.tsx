@@ -5,10 +5,10 @@ import { Radar, GitPullRequestDraft, BookOpenCheck, Workflow } from "lucide-reac
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/ui";
 
-const DEMO = [["oncall@rootline.dev", "Responder"], ["admin@rootline.dev", "Admin"], ["viewer@rootline.dev", "Viewer"]];
+const DEMO = [["oncall@opsmeridian.dev", "Responder"], ["admin@opsmeridian.dev", "Admin"], ["viewer@opsmeridian.dev", "Viewer"]];
 
 function LoginForm() {
-  const [email, setEmail] = useState("oncall@rootline.dev");
+  const [email, setEmail] = useState("oncall@opsmeridian.dev");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,8 +26,8 @@ function LoginForm() {
       <div><label className="label" htmlFor="password">Password</label><input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
       <button className="btn-primary w-full py-2.5" disabled={busy}>{busy && <Spinner />}Sign in</button>
       <div className="rounded-lg border border-dashed border-line p-3 text-xs text-muted">
-        <p className="mb-2 font-medium text-fg">Demo accounts · password <code className="mono text-accent">rootline-demo</code></p>
-        <div className="flex flex-wrap gap-1.5">{DEMO.map(([e, r]) => <button type="button" key={e} onClick={() => { setEmail(e); setPassword("rootline-demo"); }} className="rounded-md border border-line bg-raised px-2 py-1 hover:border-accent/50">{r}</button>)}</div>
+        <p className="mb-2 font-medium text-fg">Demo accounts · password <code className="mono text-accent">opsmeridian-demo</code></p>
+        <div className="flex flex-wrap gap-1.5">{DEMO.map(([e, r]) => <button type="button" key={e} onClick={() => { setEmail(e); setPassword("opsmeridian-demo"); }} className="rounded-md border border-line bg-raised px-2 py-1 hover:border-accent/50">{r}</button>)}</div>
       </div>
     </form>
   );
@@ -38,7 +38,7 @@ export default function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       <div className="relative hidden overflow-hidden border-r border-line bg-panel p-12 lg:flex lg:flex-col lg:justify-between">
         <div className="pointer-events-none absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-accent/20 blur-3xl" />
-        <div className="relative flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-9 w-9" /><span className="text-lg font-semibold">Rootline</span></div>
+        <div className="relative flex items-center gap-3"><img src="/favicon.svg" alt="" className="h-9 w-9" /><span className="text-lg font-semibold">OpsMeridian</span></div>
         <div className="relative">
           <h1 className="max-w-md text-4xl font-semibold leading-tight tracking-tight">From first alert to verified fix, in minutes.</h1>
           <ul className="mt-8 space-y-4 text-sm text-muted">

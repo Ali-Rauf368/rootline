@@ -142,8 +142,8 @@ export default async function incidentRoutes(app: FastifyInstance) {
     const [svc, inc] = await Promise.all([one("SELECT repo FROM services WHERE name = $1", [fix.service]), one("SELECT key, title FROM incidents WHERE id = $1", [fix.incident_id])]);
     try {
       const pr = await openDraftPr({
-        repo: svc?.repo ?? null, service: fix.service, branch: `rootline/${inc.key.toLowerCase()}-fix-${id}`, title: `[${inc.key}] ${fix.title}`,
-        body: `## ${inc.key}: ${inc.title}\n\n${fix.description}\n\n### Verification\n${fix.verification.checks.map((c: { status: string; name: string; detail: string }) => `- ${c.status === "pass" ? "✅" : "❌"} **${c.name}**: ${c.detail}`).join("\n")}\n\n_Approved by ${req.user!.name} in Rootline. Drafted by the Rootline agent; review before merging._`,
+        repo: svc?.repo ?? null, service: fix.service, branch: `opsmeridian/${inc.key.toLowerCase()}-fix-${id}`, title: `[${inc.key}] ${fix.title}`,
+        body: `## ${inc.key}: ${inc.title}\n\n${fix.description}\n\n### Verification\n${fix.verification.checks.map((c: { status: string; name: string; detail: string }) => `- ${c.status === "pass" ? "✅" : "❌"} **${c.name}**: ${c.detail}`).join("\n")}\n\n_Approved by ${req.user!.name} in OpsMeridian. Drafted by the OpsMeridian agent; review before merging._`,
         verification: fix.verification, testPatch: fix.test_patch,
       });
       const updated = await one("UPDATE fix_proposals SET status = 'pr_opened', pr_url = $2, pr_number = $3, pr_mode = $4 WHERE id = $1 RETURNING *", [id, pr.url, pr.number, pr.mode]);
@@ -154,7 +154,7 @@ export default async function incidentRoutes(app: FastifyInstance) {
       return updated;
     } catch (e) {
       await q("UPDATE fix_proposals SET status = 'failed', decision_note = $2 WHERE id = $1", [id, `PR creation failed: ${(e as Error).message}`]);
-      await addEvent(fix.incident_id, "pr", "PR creation failed", (e as Error).message, "rootline");
+      await addEvent(fix.incident_id, "pr", "PR creation failed", (e as Error).message, "opsmeridian");
       await publish({ type: "fix.updated", incidentId: fix.incident_id });
       return reply.code(502).send({ error: "github_error", message: (e as Error).message });
     }

@@ -14,6 +14,9 @@ const schema = z.object({
   ANTHROPIC_MODEL: z.string().default("claude-opus-5-5"),
   AGENT_MODE: z.enum(["auto", "claude", "heuristic"]).default("auto"),
   AGENT_MAX_STEPS: z.coerce.number().int().min(3).max(40).default(16),
+  /** Optional: cost findings are explained by Gemini; without a key the built-in rules are used */
+  GEMINI_API_KEY: z.string().optional().transform((v) => v || undefined),
+  GEMINI_MODEL: z.string().default("gemini-flash-latest"),
   SIMULATOR: z.enum(["on", "off"]).default("on"),
   LOG_LEVEL: z.string().default("info"),
 });

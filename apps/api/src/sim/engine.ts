@@ -89,9 +89,9 @@ export function onFixMerged(incidentId: number, service: string, files: { path: 
     try {
       const changes = [];
       for (const f of files) changes.push(await changeFile(service, f.path, () => f.after));
-      await ingestDeploy({ service, sha: sha(), author: "rootline-bot", message: `Merge fix for incident #${incidentId} (rollback)`, kind: "rollback", files: changes.map((c) => c.file), diff: changes.map((c) => c.diff).join("\n"), source: "simulator" });
+      await ingestDeploy({ service, sha: sha(), author: "opsmeridian-bot", message: `Merge fix for incident #${incidentId} (rollback)`, kind: "rollback", files: changes.map((c) => c.file), diff: changes.map((c) => c.diff).join("\n"), source: "simulator" });
       for (const a of active) if (a.effects.some((e) => e.service === service)) a.resolved = true;
-      setTimeout(() => addEvent(incidentId, "signal", "Metrics recovering", "Error rate and latency are returning to baseline after the fix deployed.", "rootline").catch(() => {}), 45_000);
+      setTimeout(() => addEvent(incidentId, "signal", "Metrics recovering", "Error rate and latency are returning to baseline after the fix deployed.", "opsmeridian").catch(() => {}), 45_000);
     } catch (e) { console.error("sim merge failed:", (e as Error).message); }
   }, 15_000);
 }

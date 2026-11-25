@@ -1,4 +1,4 @@
--- Rootline schema (idempotent). Incident state, signals, knowledge, agent runs, audit, job queue.
+-- OpsMeridian schema (idempotent). Incident state, signals, knowledge, agent runs, audit, job queue.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -280,4 +280,74 @@ CREATE TABLE IF NOT EXISTS fix_approvals (
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (fix_id, user_id)
+);
+
+-- ───────────── Cloud cost (FinOps) ─────────────
+-- Landing table for NiFi: everything is TEXT so one bad cell can't fail a bulk insert; validated when the batch is merged.
+CREATE TABLE IF NOT EXISTS cost_staging (
+  batch_id TEXT NOT NULL,
+  provider TEXT, resource_id TEXT, resource_type TEXT, service TEXT, usage_cost TEXT,
+  cpu_avg TEXT, attached_instance_id TEXT, tags TEXT, billing_date TEXT,
+  loaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cost_staging_batch ON cost_staging (batch_id);
+
+CREATE TABLE IF NOT EXISTS cost_batches (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL DEFAULT 'nifi',
+  status TEXT NOT NULL CHECK (status IN ('queued','processing','completed','failed')) DEFAULT 'queued',
+  accepted INT NOT NULL DEFAULT 0,
+  rejected INT NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS cost_records (
+  provider TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  service TEXT NOT NULL,
+  usage_cost NUMERIC(14,4) NOT NULL,
+  cpu_avg NUMERIC(5,2),
+  attached_instance_id TEXT,
+  tags JSONB NOT NULL DEFAULT '{}',
+  billing_date DATE NOT NULL,
+  batch_id TEXT,
+  PRIMARY KEY (provider, resource_id, service, billing_date)
+);
+CREATE INDEX IF NOT EXISTS cost_records_date ON cost_records (billing_date);
+
+CREATE TABLE IF NOT EXISTS cost_findings (
+  id SERIAL PRIMARY KEY,
+  dedupe_key TEXT UNIQUE NOT NULL,
+  rule TEXT NOT NULL CHECK (rule IN ('spike','idle','overprovisioned','unattached')),
+  provider TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  service TEXT NOT NULL,
+  team TEXT NOT NULL DEFAULT 'unassigned',
+  env TEXT NOT NULL DEFAULT 'unknown',
+  monthly_cost NUMERIC(14,2) NOT NULL,
+  max_savings NUMERIC(14,2) NOT NULL,       -- deterministic ceiling; an AI estimate can never exceed it
+  evidence JSONB NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL CHECK (status IN ('open','pr_opened','intentional','resolved')) DEFAULT 'open',
+  root_cause TEXT,
+  risk_level TEXT CHECK (risk_level IN ('LOW','MEDIUM','HIGH')),
+  remediation_snippet TEXT,
+  estimated_monthly_savings NUMERIC(14,2),
+  analysis_source TEXT,                     -- gemini | rules
+  approvals INT[] NOT NULL DEFAULT '{}',
+  pr_url TEXT,
+  decided_by INT REFERENCES users(id) ON DELETE SET NULL,
+  decided_at TIMESTAMPTZ,
+  decision_note TEXT,
+  detected_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS cost_findings_status ON cost_findings (status, max_savings DESC);
+
+CREATE TABLE IF NOT EXISTS cost_exclusions (
+  resource_id TEXT PRIMARY KEY,
+  reason TEXT NOT NULL DEFAULT '',
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

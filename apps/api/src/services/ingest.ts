@@ -88,7 +88,7 @@ export async function ingestMetrics(points: z.infer<typeof MetricIn>[]) {
         await startInvestigation(related.id, `blast radius grew: ${p.service}`);
       }
       const seen = await one("SELECT 1 FROM incident_events WHERE incident_id = $1 AND kind = 'signal' AND data->>'metric' = $2 AND data->>'service' = $3", [related.id, p.name, p.service]);
-      if (!seen) await addEvent(related.id, "signal", `${label}: ${rule.label.toLowerCase()} anomalous${related.services.includes(p.service) ? "" : " (correlated via dependency graph)"}`, `${fmt(d.value, p.name)} vs ${fmt(d.baseline, p.name)} (z = ${d.zscore})`, "rootline", { metric: p.name, service: p.service });
+      if (!seen) await addEvent(related.id, "signal", `${label}: ${rule.label.toLowerCase()} anomalous${related.services.includes(p.service) ? "" : " (correlated via dependency graph)"}`, `${fmt(d.value, p.name)} vs ${fmt(d.baseline, p.name)} (z = ${d.zscore})`, "opsmeridian", { metric: p.name, service: p.service });
       await q("INSERT INTO anomalies (service, metric, ts, value, baseline, zscore, incident_id) VALUES ($1,$2,now(),$3,$4,$5,$6)", [p.service, p.name, d.value, d.baseline, d.zscore, related.id]);
       await publish({ type: "incident.updated", incidentId: related.id });
       anomalies.push({ service: p.service, metric: p.name, ...d, incidentId: related.id, correlated: true });
@@ -116,7 +116,7 @@ export async function ingestMetrics(points: z.infer<typeof MetricIn>[]) {
     if (!created && incident) {
       // record additional affected signals on an already-open incident (once per metric)
       const seen = await one("SELECT 1 FROM incident_events WHERE incident_id = $1 AND kind = 'signal' AND data->>'metric' = $2", [incident.id, p.name]);
-      if (!seen) await addEvent(incident.id, "signal", `${rule.label} also anomalous`, `${fmt(d.value, p.name)} vs ${fmt(d.baseline, p.name)} (z = ${d.zscore})`, "rootline", { metric: p.name });
+      if (!seen) await addEvent(incident.id, "signal", `${rule.label} also anomalous`, `${fmt(d.value, p.name)} vs ${fmt(d.baseline, p.name)} (z = ${d.zscore})`, "opsmeridian", { metric: p.name });
     }
     anomalies.push({ service: p.service, metric: p.name, ...d, incidentId: incident?.id });
   }

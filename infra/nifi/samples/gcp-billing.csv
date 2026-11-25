@@ -1,0 +1,16 @@
+resource.name,resource.type,service.description,cost,cpu_avg,attached_instance_id,labels,usage_start_time
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-10
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-11
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-12
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-13
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-14
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-15
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-16
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-17
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-18
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-19
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-20
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-21
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-22
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-23
+sample-worker,instance,Compute Engine,20.00,5.5,,"{""env"":""development"",""owner"":""data-team""}",2026-11-24

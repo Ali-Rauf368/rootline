@@ -8,3 +8,4 @@ dist/
 coverage/
 *.log
 apps/web/next-env.d.ts
+infra/nifi/billing/

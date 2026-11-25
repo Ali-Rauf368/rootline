@@ -20,8 +20,8 @@ export async function investigate(incidentId: number, trigger = "auto") {
   const inv = await one("INSERT INTO investigations (incident_id, status, mode, model, started_at) VALUES ($1,'running',$2,$3,now()) RETURNING *", [incidentId, mode, mode === "claude" ? env.ANTHROPIC_MODEL : null]);
   const publishStatus = (status: string) => publish({ type: "investigation.status", incidentId, investigationId: inv.id, status });
   await publishStatus("running");
-  if (incident.status === "detected") await setStatus(incidentId, "investigating", "rootline-agent", `Investigation started (${mode}, trigger: ${trigger})`);
-  else await addEvent(incidentId, "agent", `Investigation started (${mode})`, `Trigger: ${trigger}`, "rootline-agent");
+  if (incident.status === "detected") await setStatus(incidentId, "investigating", "opsmeridian-agent", `Investigation started (${mode}, trigger: ${trigger})`);
+  else await addEvent(incidentId, "agent", `Investigation started (${mode})`, `Trigger: ${trigger}`, "opsmeridian-agent");
 
   let seq = 0;
   const record = async (s: { kind: string; tool?: string; input?: unknown; output?: unknown; durationMs?: number }) => {
@@ -58,13 +58,13 @@ export async function investigate(incidentId: number, trigger = "auto") {
     const top = ranked[0]?.h;
     if (top) {
       await q("UPDATE incidents SET root_cause = $2, confidence = $3, updated_at = now() WHERE id = $1", [incidentId, top.title, top.confidence]);
-      await addEvent(incidentId, "hypothesis", `Top hypothesis (${Math.round(top.confidence * 100)}%): ${top.title}`, top.description, "rootline-agent", { confidence: top.confidence });
-      if (top.confidence >= 0.6) await setStatus(incidentId, "identified", "rootline-agent", "Root cause identified with high confidence. Awaiting human confirmation.");
+      await addEvent(incidentId, "hypothesis", `Top hypothesis (${Math.round(top.confidence * 100)}%): ${top.title}`, top.description, "opsmeridian-agent", { confidence: top.confidence });
+      if (top.confidence >= 0.6) await setStatus(incidentId, "identified", "opsmeridian-agent", "Root cause identified with high confidence. Awaiting human confirmation.");
     }
     await publish({ type: "hypotheses.updated", incidentId });
 
     // Verify and store fix proposals (never auto-applied)
-    if (!flag("fix_generation") && ctx.fixes.length) await addEvent(incidentId, "agent", "Fix generation is turned off", "The agent found a candidate fix but feature toggle fix_generation is off.", "rootline-agent");
+    if (!flag("fix_generation") && ctx.fixes.length) await addEvent(incidentId, "agent", "Fix generation is turned off", "The agent found a candidate fix but feature toggle fix_generation is off.", "opsmeridian-agent");
     for (const f of flag("fix_generation") ? ctx.fixes : []) {
       // identical patch already awaiting approval (e.g. from an earlier run) → keep that one
       if (await one("SELECT 1 FROM fix_proposals WHERE incident_id = $1 AND patch = $2 AND status IN ('pending_approval','approved','pr_opened')", [incidentId, f.patch])) continue;
@@ -73,21 +73,21 @@ export async function investigate(incidentId: number, trigger = "auto") {
       const fix = await one(`INSERT INTO fix_proposals (incident_id, hypothesis_id, service, title, description, strategy, patch, test_patch, verification, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
         [incidentId, idMap.get(f.hypothesisIndex) ?? null, f.service, f.title, f.description, f.strategy, f.patch, f.testPatch, JSON.stringify(verification), verification.passed ? "pending_approval" : "failed"]);
       await addEvent(incidentId, "fix", verification.passed ? `Fix proposed and verified: ${f.title}` : `Fix proposed but failed verification: ${f.title}`,
-        verification.checks.map((c) => `${c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "–"} ${c.name}`).join("\n"), "rootline-agent", { fixId: fix.id, passed: verification.passed });
+        verification.checks.map((c) => `${c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "–"} ${c.name}`).join("\n"), "opsmeridian-agent", { fixId: fix.id, passed: verification.passed });
     }
     if (ctx.fixes.length) await publish({ type: "fix.updated", incidentId });
 
     const summary = ctx.summary ?? (top ? `Most likely cause: ${top.title}` : "Investigation finished without a conclusive root cause.");
     await record({ kind: "conclusion", output: { text: summary } });
     await q("UPDATE investigations SET status = 'completed', finished_at = now(), summary = $2, input_tokens = $3, output_tokens = $4 WHERE id = $1", [inv.id, summary, usage.input, usage.output]);
-    await addEvent(incidentId, "agent", "Investigation completed", summary, "rootline-agent", { investigationId: inv.id, steps: seq });
-    await audit("rootline-agent", "investigation.completed", `incident:${incidentId}`, { investigationId: inv.id, mode, hypotheses: ctx.hypotheses.length, fixes: ctx.fixes.length });
+    await addEvent(incidentId, "agent", "Investigation completed", summary, "opsmeridian-agent", { investigationId: inv.id, steps: seq });
+    await audit("opsmeridian-agent", "investigation.completed", `incident:${incidentId}`, { investigationId: inv.id, mode, hypotheses: ctx.hypotheses.length, fixes: ctx.fixes.length });
     await publishStatus("completed");
   } catch (e) {
     const msg = (e as Error).message;
     await record({ kind: "error", output: { error: msg } }).catch(() => {});
     await q("UPDATE investigations SET status = 'failed', finished_at = now(), error = $2 WHERE id = $1", [inv.id, msg.slice(0, 1000)]);
-    await addEvent(incidentId, "agent", "Investigation failed", msg, "rootline-agent");
+    await addEvent(incidentId, "agent", "Investigation failed", msg, "opsmeridian-agent");
     await publishStatus("failed");
     throw e;
   }

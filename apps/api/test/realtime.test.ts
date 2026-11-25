@@ -19,7 +19,7 @@ beforeAll(async () => {
   rt = attachRealtime(app.server);
   await app.listen({ port: 0, host: "127.0.0.1" });
   url = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
-  [admin, oncall, viewer] = await Promise.all([login(app, "admin@rootline.dev"), login(app), login(app, "viewer@rootline.dev")]);
+  [admin, oncall, viewer] = await Promise.all([login(app, "admin@opsmeridian.dev"), login(app), login(app, "viewer@opsmeridian.dev")]);
 });
 afterAll(async () => { sockets.forEach((s) => s.close()); await rt.close(); await app.close(); await stopBusListener(); await pool.end(); });
 

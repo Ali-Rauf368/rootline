@@ -7,11 +7,23 @@ import { migrate } from "../db/migrate.js";
 import { upsertDocument } from "../services/knowledge.js";
 import { SERVICES, REPOS, KNOWLEDGE, PAST_INCIDENTS } from "./catalog.js";
 
+/** Moves demo logins seeded under the project's former name to the current ones; changed passwords are left alone. */
+async function renameDemoAccounts() {
+  for (const name of ["admin", "oncall", "viewer"]) {
+    const u = await one<{ id: number; password_hash: string }>("SELECT id, password_hash FROM users WHERE email = $1", [`${name}@rootline.dev`]);
+    if (!u) continue;
+    const isDemo = await bcrypt.compare("rootline-demo", u.password_hash);
+    await q(`UPDATE users SET email = $2, password_hash = $3 WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM users WHERE email = $2)`,
+      [u.id, `${name}@opsmeridian.dev`, isDemo ? await bcrypt.hash("opsmeridian-demo", 10) : u.password_hash]);
+  }
+}
+
 /** Idempotent demo seed: runs only when no users exist. */
 export async function seed({ force = false } = {}) {
+  await renameDemoAccounts();
   if (!force && (await one("SELECT 1 FROM users LIMIT 1"))) return false;
-  const hash = await bcrypt.hash("rootline-demo", 10);
-  for (const [email, name, role] of [["admin@rootline.dev", "Alex Admin", "admin"], ["oncall@rootline.dev", "Riley On-call", "responder"], ["viewer@rootline.dev", "Vic Viewer", "viewer"]])
+  const hash = await bcrypt.hash("opsmeridian-demo", 10);
+  for (const [email, name, role] of [["admin@opsmeridian.dev", "Alex Admin", "admin"], ["oncall@opsmeridian.dev", "Riley On-call", "responder"], ["viewer@opsmeridian.dev", "Vic Viewer", "viewer"]])
     await q("INSERT INTO users (email, name, password_hash, role) VALUES ($1,$2,$3,$4) ON CONFLICT (email) DO NOTHING", [email, name, hash, role]);
 
   for (const s of SERVICES)
@@ -59,7 +71,7 @@ export async function seed({ force = false } = {}) {
                            VALUES ($1,$2,'resolved',$3,'anomaly',$4,$5,$6,$7,$7,$8,$8,$9,$10,$11) RETURNING id`,
       [p.title, p.sev, p.services, p.cause, 0.82, started, detected, identified, resolved, admin?.id ?? null, `Resolved: ${p.cause}`]);
     for (const [ts, kind, title] of [[detected, "detected", "Incident detected via anomaly"], [identified, "hypothesis", `Root cause identified: ${p.cause}`], [resolved, "status", "Status → resolved"]] as const)
-      await q("INSERT INTO incident_events (incident_id, ts, kind, title, actor) VALUES ($1,$2,$3,$4,'rootline')", [inc.id, ts, kind, title]);
+      await q("INSERT INTO incident_events (incident_id, ts, kind, title, actor) VALUES ($1,$2,$3,$4,'opsmeridian')", [inc.id, ts, kind, title]);
     await q("INSERT INTO hypotheses (incident_id, rank, title, description, category, confidence, status, evidence) VALUES ($1,1,$2,$2,'config_change',0.82,$3,'[]')", [inc.id, p.cause, p.daysAgo === 9 ? "rejected" : "confirmed"]);
   }
   // never rewind below a key already in use (the sequence survives TRUNCATE ... RESTART IDENTITY)

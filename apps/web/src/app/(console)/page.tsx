@@ -79,7 +79,7 @@ export default function OverviewPage() {
                 </Link>
               ))}
             </div>
-          ) : <Empty icon={CheckCircle2} title="No active incidents" message="Rootline is watching logs, metrics and deploys. Use Simulate in the top bar to run a game day." />}
+          ) : <Empty icon={CheckCircle2} title="No active incidents" message="OpsMeridian is watching logs, metrics and deploys. Use Simulate in the top bar to run a game day." />}
         </Card>
 
         <Card className="card-pad">

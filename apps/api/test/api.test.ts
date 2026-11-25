@@ -15,7 +15,7 @@ const ingest = { "x-api-key": "rl_test_ingest" };
 beforeAll(async () => {
   app = await setup();
   responder = await login(app);
-  viewer = await login(app, "viewer@rootline.dev");
+  viewer = await login(app, "viewer@opsmeridian.dev");
 });
 afterAll(async () => { await app.close(); await pool.end(); });
 
@@ -28,7 +28,7 @@ async function feed(service: string, metric: string, values: number[], startMinu
 
 describe("auth & RBAC", () => {
   it("rejects bad credentials with a generic message", async () => {
-    const r = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "oncall@rootline.dev", password: "nope" } });
+    const r = await app.inject({ method: "POST", url: "/api/auth/login", payload: { email: "oncall@opsmeridian.dev", password: "nope" } });
     expect(r.statusCode).toBe(401);
   });
   it("requires a session and enforces roles", async () => {
@@ -59,7 +59,7 @@ describe("ingestion", () => {
     expect((await app.inject({ method: "POST", url: "/api/ingest/logs", headers: h, payload: { service: "catalog", message: "once" } })).json().duplicate).toBe(true);
   });
   it("issues per-source API keys (admin only) and revokes them", async () => {
-    const admin = await login(app, "admin@rootline.dev");
+    const admin = await login(app, "admin@opsmeridian.dev");
     expect((await app.inject({ method: "POST", url: "/api/keys", headers: responder, payload: { name: "x" } })).statusCode).toBe(403);
     const key = (await app.inject({ method: "POST", url: "/api/keys", headers: admin, payload: { name: "fluent-bit" } })).json();
     expect((await app.inject({ method: "POST", url: "/api/ingest/logs", headers: { "x-api-key": key.key }, payload: { service: "catalog", message: "via key" } })).statusCode).toBe(202);
@@ -189,7 +189,7 @@ it("simulator scenarios are well-formed", () => {
 describe("safety", () => {
   it("never blames a rollback/fix deploy and never correlates into an incident under mitigation", async () => {
     // the earlier checkout incident is now 'mitigating' after approval; a rollback deploy has just landed
-    await q("INSERT INTO deploys (service, sha, author, message, kind, files, diff, deployed_at) VALUES ('payments','rb1234567','rootline-bot','Merge fix for incident #1 (rollback)','rollback','[{\"path\":\"config/http.json\"}]', $1, now())",
+    await q("INSERT INTO deploys (service, sha, author, message, kind, files, diff, deployed_at) VALUES ('payments','rb1234567','opsmeridian-bot','Merge fix for incident #1 (rollback)','rollback','[{\"path\":\"config/http.json\"}]', $1, now())",
       [`--- a/config/http.json\n+++ b/config/http.json\n@@ -1,3 +1,3 @@\n {\n-  "timeoutMs": 800,\n+  "timeoutMs": 5000,\n`]);
     const base = Array.from({ length: 20 }, () => 0.003 + Math.random() * 0.0005);
     const r = (await feed("payments", "error_rate", [...base, 0.15, 0.16])).json();
@@ -197,7 +197,7 @@ describe("safety", () => {
     expect(r.anomalies[0].incidentId).not.toBe(mitigating?.id);
     await investigate(r.anomalies[0].incidentId, "test");
     const blamed = await q("SELECT d.author FROM hypotheses h JOIN deploys d ON d.id = h.suspect_deploy_id WHERE h.incident_id = $1", [r.anomalies[0].incidentId]);
-    expect(blamed.map((b) => b.author)).not.toContain("rootline-bot");
+    expect(blamed.map((b) => b.author)).not.toContain("opsmeridian-bot");
     expect(await q("SELECT 1 FROM fix_proposals WHERE incident_id = $1 AND title ILIKE '%rollback%'", [r.anomalies[0].incidentId])).toHaveLength(0);
   });
 });

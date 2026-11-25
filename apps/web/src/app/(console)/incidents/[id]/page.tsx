@@ -300,7 +300,7 @@ function FixesCard({ fixes, responder, reload, twoPerson }: { fixes: Json[]; res
       </div>
       <Modal open={!!confirm} onClose={() => setConfirm(null)} title={confirm?.decision === "approve" ? "Approve fix and open a draft PR?" : "Reject this fix?"}
         footer={<><button className="btn-secondary" onClick={() => setConfirm(null)}>Cancel</button><button className={confirm?.decision === "approve" ? "btn-ok" : "btn-danger"} onClick={decide} disabled={busy}>{busy && <Spinner />}{confirm?.decision === "approve" ? "Approve" : "Reject"}</button></>}>
-        <p className="text-sm text-muted">{confirm?.decision === "approve" ? "Rootline will create a branch, commit the verified patch and regression test, and open a draft pull request for review. Nothing is merged automatically." : "The agent's proposal will be marked as rejected. You can re-run the investigation afterwards."}</p>
+        <p className="text-sm text-muted">{confirm?.decision === "approve" ? "OpsMeridian will create a branch, commit the verified patch and regression test, and open a draft pull request for review. Nothing is merged automatically." : "The agent's proposal will be marked as rejected. You can re-run the investigation afterwards."}</p>
         <label className="label mt-4" htmlFor="note">Note for the audit log (optional)</label>
         <textarea id="note" className="input min-h-[70px]" value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} />
       </Modal>

@@ -4,7 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; LOCAL="$ROOT/.local"; mkdir -p "$LOCAL"
 PG_PORT=55434 API_PORT=4100 WEB_PORT=3100
-say() { printf '\033[1;36m[rootline]\033[0m %s\n' "$*"; }
+say() { printf '\033[1;36m[opsmeridian]\033[0m %s\n' "$*"; }
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 [ -f "$ROOT/apps/api/.env" ] && { set -a; . "$ROOT/apps/api/.env"; set +a; }
 [ -d "$ROOT/node_modules" ] || { say "installing dependencies…"; (cd "$ROOT" && npm install --no-audit --no-fund); }
@@ -22,7 +22,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 export PORT=$API_PORT WEB_ORIGIN="http://localhost:$WEB_PORT" NEXT_PUBLIC_API_URL="http://localhost:$API_PORT" API_URL="http://127.0.0.1:$API_PORT"
 
-say "open http://localhost:$WEB_PORT   ·   oncall@rootline.dev / rootline-demo"
+say "open http://localhost:$WEB_PORT   ·   oncall@opsmeridian.dev / opsmeridian-demo"
 say "agent: ${ANTHROPIC_API_KEY:+Claude ($ANTHROPIC_MODEL)}${ANTHROPIC_API_KEY:-heuristic (set ANTHROPIC_API_KEY in apps/api/.env for Claude)}"
 cd "$ROOT"
 exec npx concurrently -k -n api,web -c cyan,magenta \

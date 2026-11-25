@@ -13,6 +13,7 @@ export type BusEvent =
   | { type: "investigation.step"; incidentId: number; investigationId: number; step: unknown }
   | { type: "investigation.status"; incidentId: number; investigationId: number; status: string }
   | { type: "hypotheses.updated" | "fix.updated"; incidentId: number }
+  | { type: "cost.updated" }
   | { type: "metrics.tick"; ts: string }
   | { type: "log"; log: unknown }
   | { type: "deploy"; deploy: unknown }

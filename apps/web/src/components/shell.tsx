@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertOctagon, Boxes, ScrollText, GitCommitHorizontal, BookOpen, Plug, ShieldCheck, Menu, X, Sun, Moon, LogOut, Search, Zap, ChevronRight, CornerDownLeft, Settings2, Wrench } from "lucide-react";
+import { Activity, AlertOctagon, Boxes, ScrollText, GitCommitHorizontal, BookOpen, Plug, ShieldCheck, Menu, X, Sun, Moon, LogOut, Search, Zap, ChevronRight, CornerDownLeft, Settings2, Wrench, CircleDollarSign } from "lucide-react";
 import { api, useApi } from "@/lib/api";
 import { useRealtime, type LiveEvent, type LiveState } from "@/lib/live";
 import type { Socket } from "socket.io-client";
@@ -60,6 +60,7 @@ const NAV = [
     { href: "/services", label: "Services", icon: Boxes },
     { href: "/logs", label: "Logs", icon: ScrollText },
     { href: "/changes", label: "Changes", icon: GitCommitHorizontal },
+    { href: "/costs", label: "Cloud costs", icon: CircleDollarSign },
   ] },
   { group: "Knowledge", items: [{ href: "/knowledge", label: "Runbooks & docs", icon: BookOpen }] },
   { group: "Platform", items: [{ href: "/integrations", label: "Integrations", icon: Plug }, { href: "/audit", label: "Audit log", icon: ShieldCheck }, { href: "/settings", label: "Settings & toggles", icon: Settings2 }] },
@@ -99,7 +100,7 @@ function ShellInner({ children }: { children: ReactNode }) {
       toast("New incident detected. The agent is investigating.", "info");
       if (prefsRef.current.soundAlerts) chime();
       if (prefsRef.current.desktopNotifications && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
-        const n = new Notification("Rootline: new incident", { body: "The agent has started investigating.", tag: `inc-${e.incidentId}`, icon: "/favicon.svg" });
+        const n = new Notification("OpsMeridian: new incident", { body: "The agent has started investigating.", tag: `inc-${e.incidentId}`, icon: "/favicon.svg" });
         n.onclick = () => { window.focus(); router.push(`/incidents/${e.incidentId}`); };
       }
     }
@@ -127,7 +128,7 @@ function ShellInner({ children }: { children: ReactNode }) {
     <nav className="flex h-full flex-col" aria-label="Main">
       <Link href="/" className="mb-6 flex items-center gap-2.5 px-3 pt-1">
         <img src="/favicon.svg" alt="" className="h-8 w-8" />
-        <div><p className="text-sm font-semibold leading-tight">Rootline</p><p className="text-[11px] text-subtle">Incident intelligence</p></div>
+        <div><p className="text-sm font-semibold leading-tight">OpsMeridian</p><p className="text-[11px] text-subtle">Incident &amp; cost intelligence</p></div>
       </Link>
       <div className="flex-1 space-y-5 overflow-y-auto">
         {NAV.map((g) => (
@@ -247,7 +248,7 @@ function SimulateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   };
   return (
     <Modal open={open} onClose={onClose} title="Game day: inject a failure" wide>
-      <p className="mb-4 text-sm text-muted">Each scenario ships a realistic change and degrades live telemetry. Watch Rootline detect it, correlate signals, investigate and propose a verified fix.</p>
+      <p className="mb-4 text-sm text-muted">Each scenario ships a realistic change and degrades live telemetry. Watch OpsMeridian detect it, correlate signals, investigate and propose a verified fix.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {(scenarios.data ?? []).map((s) => (
           <button key={s.id} onClick={() => run(s.id)} disabled={!!busy} className="card group flex flex-col items-start gap-2 p-4 text-left transition hover:border-accent/50 hover:shadow-glow">

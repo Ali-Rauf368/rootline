@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Rootline", template: "%s · Rootline" },
-  description: "Autonomous production incident & root-cause investigator",
+  title: { default: "OpsMeridian", template: "%s · OpsMeridian" },
+  description: "Incident root-cause and cloud cost intelligence",
   icons: { icon: "/favicon.svg" },
 };
 export const viewport: Viewport = { themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#090b11" }, { media: "(prefers-color-scheme: light)", color: "#f8fafc" }] };

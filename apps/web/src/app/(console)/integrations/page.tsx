@@ -8,21 +8,21 @@ import { ago } from "@/lib/format";
 
 const SNIPPETS = (origin: string) => ({
   logs: `curl -X POST ${origin}/api/ingest/logs \\
-  -H "X-API-Key: $ROOTLINE_KEY" -H "Content-Type: application/json" \\
+  -H "X-API-Key: $OPSMERIDIAN_KEY" -H "Content-Type: application/json" \\
   -d '[{"service":"checkout-api","level":"error","message":"TimeoutError: could not acquire connection"}]'`,
   metrics: `curl -X POST ${origin}/api/ingest/metrics \\
-  -H "X-API-Key: $ROOTLINE_KEY" -H "Content-Type: application/json" \\
+  -H "X-API-Key: $OPSMERIDIAN_KEY" -H "Content-Type: application/json" \\
   -d '[{"service":"checkout-api","name":"error_rate","value":0.012}]'`,
   deploys: `curl -X POST ${origin}/api/ingest/deploys \\
-  -H "X-API-Key: $ROOTLINE_KEY" -H "Content-Type: application/json" \\
+  -H "X-API-Key: $OPSMERIDIAN_KEY" -H "Content-Type: application/json" \\
   -d "{\\"service\\":\\"checkout-api\\",\\"sha\\":\\"$GITHUB_SHA\\",\\"author\\":\\"$GITHUB_ACTOR\\",\\"message\\":\\"deploy\\",\\"diff\\":$(git show --format= HEAD | jq -Rs .)}"`,
   alertmanager: `# alertmanager.yml
 receivers:
-  - name: rootline
+  - name: opsmeridian
     webhook_configs:
       - url: ${origin}/api/ingest/alerts
         http_config:
-          authorization: { type: Bearer, credentials: <ROOTLINE_KEY> }`,
+          authorization: { type: Bearer, credentials: <OPSMERIDIAN_KEY> }`,
 });
 
 export default function IntegrationsPage() {

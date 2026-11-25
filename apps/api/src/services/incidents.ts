@@ -26,14 +26,14 @@ export async function openIncident(input: { title: string; severity: "sev1" | "s
      ON CONFLICT (dedupe_key) WHERE status <> 'resolved' AND dedupe_key IS NOT NULL DO NOTHING RETURNING *`,
     [input.title, input.severity, input.services, input.startedAt, input.source, input.dedupeKey, input.summary ?? ""]);
   if (!incident) return { incident: await one("SELECT * FROM incidents WHERE dedupe_key = $1 AND status <> 'resolved'", [input.dedupeKey]), created: false };
-  await addEvent(incident.id, "detected", `Incident detected via ${input.source}`, input.summary ?? "", "rootline", input.data ?? {});
+  await addEvent(incident.id, "detected", `Incident detected via ${input.source}`, input.summary ?? "", "opsmeridian", input.data ?? {});
   await publish({ type: "incident.created", incidentId: incident.id });
   await startInvestigation(incident.id, "auto");
   return { incident, created: true };
 }
 
 export async function startInvestigation(incidentId: number, trigger: string) {
-  if (!trigger.startsWith("manual") && !flag("auto_investigate")) { await addEvent(incidentId, "agent", "Auto-investigation is turned off", `Trigger: ${trigger}. Start it manually from the war room.`, "rootline"); return; }
+  if (!trigger.startsWith("manual") && !flag("auto_investigate")) { await addEvent(incidentId, "agent", "Auto-investigation is turned off", `Trigger: ${trigger}. Start it manually from the war room.`, "opsmeridian"); return; }
   await enqueue("investigate", { incidentId, trigger }, { dedupeKey: `investigate-${incidentId}`, maxAttempts: 2 });
 }
 

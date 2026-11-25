@@ -7,6 +7,7 @@ import { env } from "./lib/env.js";
 import authRoutes from "./routes/auth.js";
 import ingestRoutes from "./routes/ingest.js";
 import incidentRoutes from "./routes/incidents.js";
+import costRoutes from "./routes/costs.js";
 import platformRoutes from "./routes/platform.js";
 
 export async function buildApp() {
@@ -43,6 +44,7 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(ingestRoutes);
   await app.register(incidentRoutes);
+  await app.register(costRoutes);
   await app.register(platformRoutes);
   return app;
 }

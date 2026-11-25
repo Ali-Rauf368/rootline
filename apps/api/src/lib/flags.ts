@@ -9,6 +9,7 @@ export const FLAG_DEFS = {
   auto_investigate: { label: "Auto-investigate new incidents", description: "Start the RCA agent as soon as an incident opens or its blast radius grows.", group: "Agent", default: true },
   claude_agent: { label: "Use Claude when configured", description: "Run investigations with Claude if an API key is set. Off forces the deterministic heuristic investigator.", group: "Agent", default: true },
   fix_generation: { label: "Generate fix proposals", description: "Let the agent draft and verify patches. Off keeps analysis-only investigations.", group: "Agent", default: true },
+  cost_ai: { label: "AI cost analysis", description: "Explain cost findings with Gemini if an API key is set. Off uses the built-in rules.", group: "Agent", default: true },
   two_person_approval: { label: "Two-person approval", description: "A fix needs approvals from two different responders before a draft PR is opened.", group: "Safety", default: false },
   anomaly_detection: { label: "Metric anomaly detection", description: "Open incidents automatically from sustained metric deviations.", group: "Detection", default: true },
   maintenance_mode: { label: "Maintenance mode", description: "Keep ingesting and recording anomalies, but don't open new incidents (planned work).", group: "Detection", default: false },
